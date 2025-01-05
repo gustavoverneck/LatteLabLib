@@ -4,7 +4,7 @@
 import pyopencl as cl
 
 # Internal dependencies
-from LatteLab.utils.device_selector import create_context_and_queue
+from LatteLab.utils import create_context_and_queue
 
 class GPUBackend:
     def __init__(self):

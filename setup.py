@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 setup(
     name="LatteLab",                   # Name of your library
     version="0.0.1",                                # Library version
-    description="A Lattice Boltzmann library with Python + PyOpenCL for GPU acceleration.",
+    description="A Python library for high-performance Lattice Boltzmann simulations with GPU acceleration.",
     author="Gustavo Arruda Verneck",
     author_email="gustavoverneck@gmail.com",
     url="https://github.com/gustavoverneck/LatteLabLib",  # Repository or project URL
@@ -13,6 +13,7 @@ setup(
     install_requires=[
         "numpy",
         "pyopencl",
+        "siphash24",
     ],
     extras_require={
         "dev": [

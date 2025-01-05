@@ -1,0 +1,7 @@
+numpy
+pyopencl
+siphash24
+
+[dev]
+pytest
+mypy

@@ -8,10 +8,10 @@ from LatteLab.gpu_backend import GPUBackend
 import numpy as np
 
 class D2Q9_GPU_Solver(LBM):
-    def __init__(self, grid_shape, relaxation_time, velocity=None, simulation_type='FLUID', data_type=np.float32):
+    def __init__(self, grid_shape, relaxation_time, velocity=None, data_type=np.float32):
         super().__init__(grid_shape, relaxation_time)
         self.backend = GPUBackend()
-        self.backend.load_kernel("lbm/kernels/d2q9_kernel.cl")
+        self.backend.load_kernel("LatteLab/kernels/d2q9_kernel.cl")
 
     def streaming(self):
         """Streaming step executed on the GPU."""
