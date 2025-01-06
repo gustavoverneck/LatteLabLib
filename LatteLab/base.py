@@ -48,6 +48,7 @@ class LBM:
     """
 
     def __init__(self, grid_shape, viscosity, velocities_model=None, data_type=np.float32):
+        self.welcomeMessage()
         self.data_type = np.float32                                                         # data type (precision) of the simulation
         self.grid_shape = grid_shape                                                        # (Nx, Ny, *Nz)
 
@@ -76,12 +77,13 @@ class LBM:
         self.cs = 1.0 / SQRT3                                                               # speed of sound
         self.csq = 1.0 / 3.0                                                                # speed of sound squared
 
-    def initialize(self, density, velocity, flags=[]):
+    def initialize(self, density, velocity, flags):
         """
-        Initialize the distribution functions with the given density and velocity.
+        Initialize the essential variables of the simulation (u, rho, flags and fistribution functions).
         Parameters:
-        density (optional): The initial density distribution. Default is None.
-        velocity (optional): The initial velocity distribution. Default is None.
+        density (optional): The initial density distribution. Default is 'ones'.
+        velocity (optional): The initial velocity distribution. Default is 'zeros'.
+        flags (optional): The initial flags distribution (1: fluid, 2: ). Default is 'fluid'.
         Sets the following attributes:
         self.rho: The density distribution.
         self.u: The velocity distribution.
@@ -91,6 +93,7 @@ class LBM:
         # Initialize the distribution functions
         self.rho = density
         self.u = velocity
+        self.flags = flags
         self.f = self.f_eq(density, velocity)
         
         pass
@@ -178,3 +181,10 @@ class LBM:
         
         self.density = np.sum(self.distributions, axis=-1) # sum along velocity directions
         pass
+
+    def welcomeMessage(self):
+        message = "--------------------------------------------------------------------------------"
+        message += "\n" + r"Welcome to LatteLab!"
+        message += " "*39 + "by Gustavo A. Verneck\n"
+        message += "Starting the Lattice Boltzmann Method (LBM) simulation!\n"
+        print(message)

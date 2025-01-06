@@ -1,6 +1,8 @@
 import pyopencl as cl
 import numpy as np
 
+from LatteLab.utils import create_context_and_queue
+
 class GPUBackend:
     """
     A class to manage GPU operations using PyOpenCL.
@@ -9,8 +11,8 @@ class GPUBackend:
 
     def __init__(self):
         # Initialize OpenCL context and command queue
-        self.context = cl.create_some_context()
-        self.queue = cl.CommandQueue(self.context, properties=cl.command_queue_properties.PROFILING_ENABLE)
+        self.context, self.queue, self.info_str = create_context_and_queue()
+        print(self.info_str)
         self.program = None
 
     def load_kernel(self, kernel_path):
