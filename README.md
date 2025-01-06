@@ -1,4 +1,6 @@
 ```
+A Lattice Boltzmann library with Python + PyOpenCL for GPU acceleration.
+
 lattice_boltzmann_lib/
 ├── lbm/
 │   ├── __init__.py              # Initialize library as a Python package
