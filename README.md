@@ -1,5 +1,5 @@
 # LatteLab
-##A Lattice Boltzmann library with Python + PyOpenCL for GPU acceleration.
+## A Lattice Boltzmann library with Python + PyOpenCL for GPU acceleration.
 ```
 lattice_boltzmann_lib/
 ├── lbm/
