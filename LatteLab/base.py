@@ -5,6 +5,7 @@ import numpy as np
 
 # Internal dependencies
 from LatteLab.utils import flatten, unflatten, xyz
+from LatteLab.utils.constants import *
 
 
 class LBM:
@@ -46,10 +47,13 @@ class LBM:
             Update the density field.
     """
 
-    def __init__(self, velocities_model, grid_shape, viscosity, velocity=None, data_type=np.float32):
+    def __init__(self, grid_shape, viscosity, velocities_model=None, data_type=np.float32):
         self.data_type = np.float32                                                         # data type (precision) of the simulation
         self.grid_shape = grid_shape                                                        # (Nx, Ny, *Nz)
-        
+
+        self.dx = 1.0                                                                       # lattice spacing
+        self.dt = 1.0                                                                       # time step
+
         # Get the number of grid cells per dimension
         if len(grid_shape) == 2:
             self.Nx, self.Ny = grid_shape
@@ -57,23 +61,39 @@ class LBM:
         elif len(grid_shape) == 3:
             self.Nx, self.Ny, self.Nz = grid_shape
 
+        # Set the velocities model for Q, c, and w
         self.setVelocitiesModel(velocities_model)                                           # set the velocities model
 
+        # Initialize LBM variables
         self.N = np.prod(grid_shape)                                                        # total number of grid cells
         self.nu = viscosity                                                                 # kinematic viscosity nu
         self.tau = 1.0 / (3.0 * viscosity + 0.5)                                            # relaxation time tau
         self.omega = 1.0 / self.tau                                                         # relaxation frequency omega
-        self.v = velocity or np.array(self.N, dtype=data_type)                              # velocity field
+        self.f = np.zeros((self.N, self.Q), dtype=self.data_type)                           # distribution functions
+        self.u = np.zeros((self.N, self.D), dtype=self.data_type)                           # velocity field
         self.rho = np.ones(self.N, dtype=data_type)                                         # density field
-        self.f = np.zeros((self.N, self.Q), dtype=data_type)                                # distribution functions
         
-        self.cs = 1.0 / np.sqrt(3.0)                                                        # speed of sound
+        self.cs = 1.0 / SQRT3                                                               # speed of sound
         self.csq = 1.0 / 3.0                                                                # speed of sound squared
 
-    def initialize(self, density=None, velocity=None):
-        """Initialize LBM variables."""
+    def initialize(self, density, velocity, flags=[]):
+        """
+        Initialize the distribution functions with the given density and velocity.
+        Parameters:
+        density (optional): The initial density distribution. Default is None.
+        velocity (optional): The initial velocity distribution. Default is None.
+        Sets the following attributes:
+        self.rho: The density distribution.
+        self.u: The velocity distribution.
+        self.f: The f_eq distribution functions based on the given density and velocity.
+        """
+        
         # Initialize the distribution functions
-        self.distributions = self.equilibrium(self.density, self.velocity)
+        self.rho = density
+        self.u = velocity
+        self.f = self.f_eq(density, velocity)
+        
+        pass
     
     def setVelocitiesModel(self, velocities_model):
         """
@@ -92,19 +112,23 @@ class LBM:
         - self.w (np.ndarray): Array of weights for each discrete velocity.
         """
         if velocities_model == 'D2Q9':
+            self.D = 2
             self.Q = 9
             self.c = np.array([[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1], [-1, -1], [1, -1]])
             self.w = np.array([4/9, 1/9, 1/9, 1/9, 1/9, 1/36, 1/36, 1/36, 1/36])
         elif velocities_model == 'D3Q19':
+            self.D = 3
             self.Q = 19
             self.c = np.array([[0, 0, 0], [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1],
                                [1, 1, 0], [-1, 1, 0], [1, -1, 0], [-1, -1, 0], [1, 0, 1], [-1, 0, 1], [1, 0, -1],
                                [-1, 0, -1], [0, 1, 1], [0, -1, 1], [0, 1, -1], [0, -1, -1]])
             self.w = np.array([1/3, 1/18, 1/18, 1/18, 1/18, 1/18, 1/18, 1/36, 1/36, 1/36, 1/36, 1/36, 1/36, 1/36,
                                1/36, 1/36, 1/36, 1/36, 1/36])
+        else:
+            raise ValueError(f"Unsupported velocities model: {velocities_model}")
         pass
 
-    def equilibrium(self, density, velocity):
+    def f_eq(self, density, velocity):
         """
         Calculate the equilibrium distribution function.
         Parameters:
@@ -113,7 +137,7 @@ class LBM:
         Returns:
         numpy.ndarray: The equilibrium distribution function for each lattice point and direction.
         """
-        f_eq = np.zeros_like(self.distributions)
+        f_eq = np.zeros((density.shape[0], self.Q), dtype=self.data_type)
         for i, w_i in enumerate(self.w):
             cu = np.dot(velocity, self.c[i])
             f_eq[..., i] = w_i * density * (1 + 3*cu + 4.5*cu**2 - 1.5*np.sum(velocity**2, axis=-1))

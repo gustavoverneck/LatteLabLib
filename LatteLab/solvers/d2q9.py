@@ -8,22 +8,16 @@ from LatteLab.gpu_backend import GPUBackend
 import numpy as np
 
 class D2Q9_GPU_Solver(LBM):
-    def __init__(self, grid_shape, relaxation_time, velocity=None, data_type=np.float32):
-        super().__init__(grid_shape, relaxation_time)
+    def __init__(self, grid_shape, relaxation_time, velocities_model="D2Q9", data_type=np.float32):
+        super().__init__(grid_shape, relaxation_time, velocities_model=velocities_model, data_type=data_type)
         self.backend = GPUBackend()
         self.backend.load_kernel("LatteLab/kernels/d2q9_kernel.cl")
 
-    def streaming(self):
-        """Streaming step executed on the GPU."""
-        grid_size = np.prod(self.grid_shape)
-        global_size = (grid_size,)
-        local_size = None
-        self.backend.execute_kernel(
-            "streaming", global_size, local_size,
-            self.backend.create_buffer(self.distributions),
-            np.int32(self.grid_shape[0]),
-            np.int32(self.grid_shape[1])
-        )
+        # Initialize buffers with correct dimensions
+        self.f_buffer = self.backend.create_buffer(self.f.flatten())
+        self.f_temp_buffer = self.backend.create_buffer(self.f.flatten().copy())
+        self.u_buffer = self.backend.create_buffer(self.u.flatten())
+        self.rho_buffer = self.backend.create_buffer(self.rho.flatten())
     
     def collision(self):
         """Collision step executed on the GPU."""
@@ -32,18 +26,41 @@ class D2Q9_GPU_Solver(LBM):
         local_size = None
         self.backend.execute_kernel(
             "collision", global_size, local_size,
-            self.backend.create_buffer(self.distributions),
-            self.backend.create_buffer(self.velocity),
-            self.backend.create_buffer(self.density),
-            np.float32(self.relaxation_time)
+            self.f_buffer,  # Pass GPU buffers
+            self.f_temp_buffer,
+            self.u_buffer,
+            self.rho_buffer,
+            np.float32(self.tau),
+            np.int32(self.Nx),
+            np.int32(self.Ny)
+        )
+
+    def streaming(self):
+        """Streaming step executed on the GPU."""
+        grid_size = np.prod(self.grid_shape)
+        global_size = (grid_size,)
+        local_size = None
+        self.backend.execute_kernel(
+            "collision", global_size, local_size,
+            self.f_buffer,  # Pass GPU buffers
+            self.f_temp_buffer,
+            self.u_buffer,
+            self.rho_buffer,
+            np.float32(self.tau),
+            np.int32(self.Nx),
+            np.int32(self.Ny)
         )
     
-    def export(self, positions=True, density=True, velocity=True):
-        """Export the density field from the GPU to the CPU."""
-        self.distributions = self.backend.get_buffer(self.distributions)
-        self.velocity = self.backend.get_buffer(self.velocity)
-        self.density = self.backend.get_buffer(self.density)
+    def stream_collide(self):
+        self.collision()
+        self.streaming()
 
+    def export(self, density=True, velocity=True):
+        """Export fields from GPU to CPU."""
+        if density:
+            self.rho = self.backend.get_buffer(self.rho_buffer)
+        if velocity:
+            self.u = self.backend.get_buffer(self.u_buffer).reshape(self.grid_shape + (2,))
 
 
 class D2Q9_Solver(LBM):
