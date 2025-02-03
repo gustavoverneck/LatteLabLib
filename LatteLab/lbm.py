@@ -5,8 +5,19 @@ import jax
 import jax.numpy as jnp
 from jax import jit
 
-dx = 1.0
-dt = 1.0
+import numpy as np
+
+import vispy.scene
+import vispy.app
+from vispy.scene import visuals
+
+# Internal imports
+from .config import available_color_schemes
+
+# -----------------------------------
+
+dx = 1.0        # Lattice unit
+dt = 1.0        # Time step unit
 
 class LBM:
     def __init__(self, config):
@@ -18,57 +29,133 @@ class LBM:
         self.velocities_set = config['velocities_set']
         self.simtype = config['simtype']
         self.use_temperature = config['use_temperature']
+        self.use_graphics = config['use_graphics']
         self.grid_size = config['grid_size']
         self.viscosity = config['viscosity']
-       
-        self.D = int(self.velocities_set[1])
-        self.Q = int(self.velocities_set[3])
-       
+        self.total_timesteps = config['total_timesteps']
+        self.colorscheme = config['cmap']
+        self.windowDimensions = config['window_dimensions']
+
+        self.D = int(self.velocities_set[1])    # Number of dimensions
+        self.Q = int(self.velocities_set[3])    # Number of velocities
+
         self.omega = 1.0 / self.viscosity   # Relaxation Frequency
 
-       # Set grid size and number of nodes
-        if self.D == 2:
-            self.Nx = self.grid_size[0]
-            self.Ny = self.grid_size[1]
-            self.Nz = 1
-            self.N = self.Nx * self.Ny
-            if self.grid_size[2] != 0:
-                print("Warning: 3D grid size provided for 2D simulation. Setting Nz to 1")
-        elif self.D == 3:
-            self.Nx = self.grid_size[0]
-            self.Ny = self.grid_size[1]
-            self.Nz = self.grid_size[2]
-            self.N = self.Nx * self.Ny * self.Nz
+        # Set grid size and number of nodes
+        self.Nx, self.Ny = self.grid_size[:2]
+        self.Nz = self.grid_size[2] if self.D == 3 else 1
+        self.N = self.Nx * self.Ny * self.Nz
 
-        # Set velocities, weights and opposite velocities
-            # c : velocity directions
-            # w : weights
-            # opposite : opposite velocities indices
-        if self.velocities_set == 'D2Q9':
-            self.c = jnp.array([[0,0], [1,0], [0,1], [-1,0], [0,-1], [1,1], [-1,1], [-1,-1], [1,-1]], dtype=jnp.int32)
-            self.w = jnp.array([4./9., 1./9., 1./9., 1./9., 1./9., 1./36., 1./36., 1./36., 1./36.], dtype=jnp.float32)
-            self.opposite = jnp.array([0, 3, 4, 1, 2, 7, 8, 5, 6], dtype=jnp.int32)
-        elif self.velocities_set == 'D3Q15':
-            self.c = jnp.array([], dtype=jnp.int32)
-            self.w = jnp.array([], dtype=jnp.float32)
-            self.opposite = jnp.array([], dtype=jnp.int32)
-        elif self.velocities_set == 'D3Q27':
-            self.c = jnp.array([], dtype=jnp.int32)
-            self.w = jnp.array([], dtype=jnp.float32)
-            self.opposite = jnp.array([], dtype=jnp.int32)
-        elif self.simtype == 'D3Q19':
-            self.c = jnp.array([[0,0,0], [1,0,0], [-1,0,0], [0,1,0], [0,-1,0], [0,0,1], [0,0,-1], [1,1,0], [-1,-1,0], [1,0,1], [-1,0,-1], [0,1,1], [0,-1,-1], [1,-1,0], [-1,1,0], [1,0,-1], [-1,0,1], [0,1,-1], [0,-1,1]], dtype=jnp.int32)
-            self.w = jnp.array([1./3., 1./18., 1./18., 1./18., 1./18., 1./18., 1./18., 1./36., 1./36., 1./36., 1./36., 1./36., 1./36., 1./36., 1./36., 1./36., 1./36.,1./36., 1./36.], dtype=jnp.float32)
-            self.opposite = jnp.array([0, 2, 1, 4, 3, 6, 5, 8, 7, 10, 9, 12, 11, 14, 13, 16, 15, 18, 17])
+        self.timestep = 0
+        self.timer_interval = 0.5
 
-        # Inicialização das variáveis essenciais
-        self.f = jnp.ones((self.Nx, self.Ny, self.Nz, self.Q), dtype=jnp.float32)       # Distribution functions
-        self.rho = jnp.ones((self.Nx, self.Ny, self.Nz), dtype=jnp.float32)             # Density
-        self.u = jnp.zeros((self.Nx, self.Ny, self.Nz, self.D), dtype=jnp.float32)      # Velocity of the node
-        self.flags = jnp.zeros((self.Nx, self.Ny, self.Nz), dtype=jnp.int32)            # Flags -> 0: fluid, 1: solid, 2: equilibrium
+        # Define velocity sets
+        velocity_data = {
+            'D2Q9': (
+                [[0,0], [1,0], [0,1], [-1,0], [0,-1], [1,1], [-1,1], [-1,-1], [1,-1]],
+                [4./9., 1./9., 1./9., 1./9., 1./9., 1./36., 1./36., 1./36., 1./36.],
+                [0, 3, 4, 1, 2, 7, 8, 5, 6]
+            ),
+            'D3Q15': (
+                [[0,0,0], [1,0,0], [-1,0,0], [0,1,0], [0,-1,0], [0,0,1], [0,0,-1],
+                 [1,1,1], [-1,-1,-1], [1,-1,-1], [-1,1,1], [-1,1,-1], [1,-1,1],
+                 [1,1,-1], [-1,-1,1]],
+                [[2./9.] + [1./9.]*6 + [1./72.]*8],
+                [0, 2, 1, 4, 3, 6, 5, 8, 7, 10, 9, 12, 11, 14, 13]
+            ),
+            'D3Q19': (
+                [[0,0,0], [1,0,0], [-1,0,0], [0,1,0], [0,-1,0], [0,0,1], [0,0,-1],
+                 [1,1,0], [-1,-1,0], [1,0,1], [-1,0,-1], [0,1,1], [0,-1,-1],
+                 [1,-1,0], [-1,1,0], [1,0,-1], [-1,0,1], [0,1,-1], [0,-1,1]],
+                [[1./3.] + [1./18.]*6 + [1./36.]*12],
+                [0, 2, 1, 4, 3, 6, 5, 8, 7, 10, 9, 12, 11, 14, 13, 16, 15, 18, 17]
+            )
+        }
+        
+        if self.velocities_set in velocity_data:
+            c_vals, w_vals, opposite_vals = velocity_data[self.velocities_set]
+            self.c = jnp.array(c_vals, dtype=jnp.int32)
+            self.w = jnp.array(w_vals, dtype=jnp.float32)
+            self.opposite = jnp.array(opposite_vals, dtype=jnp.int32)
+        else:
+            raise ValueError(f"Unknown velocity set: {self.velocities_set}")
+
+        # Essential arrays
+        self.f = jnp.ones((self.Nx, self.Ny, self.Nz, self.Q), dtype=jnp.float32)
+        self.rho = jnp.ones((self.Nx, self.Ny, self.Nz), dtype=jnp.float32)
+        self.u = jnp.zeros((self.Nx, self.Ny, self.Nz, self.D), dtype=jnp.float32)
+        self.flags = jnp.zeros((self.Nx, self.Ny, self.Nz), dtype=jnp.int32)
+
+        self.data = np.random.rand(self.Nx, self.Ny, self.Nz)
+        
         if self.use_temperature:
-            self.T = jnp.ones((self.Nx, self.Ny, self.Nz), dtype=jnp.float32)               # Temperature
-      
+            self.T = jnp.ones((self.Nx, self.Ny, self.Nz), dtype=jnp.float32)
+        
+        if self.use_graphics:
+            self.initializeGraphics()
+    
+    def on_resize(self, event):
+            self.text.pos = self.canvas.size[0] - 10, 10
+
+    def initializeGraphics(self):
+        self.canvas = vispy.scene.SceneCanvas(keys='interactive', show=True)
+        self.canvas.size = self.windowDimensions
+        self.view = self.canvas.central_widget.add_view()
+        
+        # Camera settings
+        if self.D == 2:
+            self.view.camera = vispy.scene.cameras.TurntableCamera(
+                            center=(self.Nx/2, self.Ny/2, self.Nx/2),  # Center of the volume
+                            elevation=0,  # Initial viewing angle (adjustable)
+                            azimuth=90,  # Initial rotation (adjustable)
+                            distance=1.5 * max(self.grid_size),  # Adjust distance automatically
+                            fov=35
+                        )
+
+            
+        elif self.D == 3:
+            self.view.camera = vispy.scene.cameras.TurntableCamera(
+                center=(self.Nx/2, self.Ny/2, self.Nz/2),  # Volume center
+                elevation=0,  # Viewing angle (adjustable)
+                azimuth=90,  # Initial rotation (adjustable)
+                distance=1.5 * max(self.grid_size)  # Adjust distance automatically
+            )
+    
+
+        # Add text to display timestep in the upper right corner
+        self.text = visuals.Text(text=f"Timestamp: {self.timestep}", color='white', parent=self.view.scene, anchor_x='right', anchor_y='top')
+        self.text.pos = self.canvas.size[0] - 10, 10
+        self.canvas.events.resize.connect(self.on_resize)
+        
+        self.volume = visuals.Volume(self.data, parent=self.view.scene, clim=(0, 1), cmap=self.colorscheme)
+        self.viewmode = "density"
+
+        self.canvas.title = f"LatteLab"
+        # Initialize timer for automatic updates
+        self.timer = vispy.app.Timer(interval=self.timer_interval, connect=self.update_simulation, start=True)
+        vispy.app.run()
+
+
+    def setGraphicsColorScheme(self, colorscheme):
+        """Change color scheme dynamically"""
+        if colorscheme not in available_color_schemes:
+            print(f"Color scheme {colorscheme} not available. Defaulting to 'inferno'")
+            self.colorscheme = "inferno"
+        else:
+            self.colorscheme = colorscheme
+        self.volume.cmap = self.colorscheme  # Apply new color scheme
+    
+    def updateGraphicsTimestamp(self):
+        self.canvas.title = f"Timestamp: {self.timestep}"
+
+    def setGraphicsWindowDimensions(self, dimensions):
+        if not isinstance(dimensions, tuple):
+            raise ValueError("Window dimensions must be a tuple")
+        if len(dimensions) != 2:
+            raise ValueError("Window dimensions tuple must have exactly 2 elements")
+        
+        self.canvas.size = dimensions
+
     def setInitialConditions(self, rho, u, T=None):
         # Need to add validation for rho, u and T
         self.u = u
@@ -76,20 +163,26 @@ class LBM:
         if self.use_temperature:
             self.T = T
     
-    def run(self, timesteps):
-        for _ in range(timesteps):
-            self.collide_and_stream()
+    def run(self):
+        for t in range(self.total_timesteps):
+            #self.collide_and_stream()
+            self.test()
+            print(f"Running timestep {t}")
+            if self.use_graphics:
+                self.updateGraphicsTimestamp()
         
+        print("Simulation completed.")
+            
     def getResults(self):
         """Return LBM simulation results"""
         return self.rho, self.u
 
-    @jit
     def compute_feq(self):
-        cu = jnp.einsum("qd,xyzq->xyz", self.c, self.u)         # c_i . u
-        usqr = jnp.einsum("xyzq,xyzq->xyz", self.u, self.u)     # u . u
-        feq = self.w[None, None, None, :] * self.rho[..., None]  # rho * w_i
-        feq *= 1 + 3 * cu + 9/2 * cu**2 - 3/2 * usqr[..., None]
+        """Computes the equilibrium distribution function f_eq."""
+        cu = jnp.einsum("dq, xyzd -> xyzq", self.c.T, self.u)  # c . u
+        usqr = jnp.einsum("xyzd, xyzd -> xyz", self.u, self.u)  # u . u
+        feq = self.w[None, None, None, :] * self.rho[..., None]
+        feq *= 1 + 3 * cu + (9 / 2) * cu**2 - (3 / 2) * usqr[..., None]
         return feq
 
     def stream(self, q, f_new):
@@ -101,16 +194,14 @@ class LBM:
         f_new = f_new.at[self.flags == 1, q].set(self.f[self.flags == 1, opposite_q])   # Bounce-back if solid
         return f_new
 
-    @jit
     def collide_and_stream(self):
+        """Performs LBM collision and streaming step."""
         feq = self.compute_feq()
-        self.f = self.f + self.omega * (feq - self.f)  # BGK collision
+        self.f = self.f + self.omega * (feq - self.f)  # Collision
 
-        # Streaming step (shifts f in the direction of c_i)
-        self.f = jax.lax.fori_loop(0, self.Q, self.stream, self.f)
-
-        # Bounce-back boundary condition
-        self.f = jax.lax.fori_loop(0, self.Q, self.bounce_back, self.f)
+        # Streaming step
+        for q in range(self.Q):
+            self.f = self.f.at[..., q].set(jnp.roll(self.f[..., q], shift=self.c[q], axis=(0, 1, 2)))
 
         # **Apply Periodic Boundary if No Solids in Borders**
         if not jnp.any(self.flags[0, :, :]):  # Left boundary
@@ -121,3 +212,18 @@ class LBM:
             self.f = self.f.at[:, 0, :].set(self.f[:, -2, :])
         if not jnp.any(self.flags[:, -1, :]):  # Top boundary
             self.f = self.f.at[:, -1, :].set(self.f[:, 1, :])
+
+    def update_simulation(self, event):
+        self.timestep += 1
+        print(f"Running timestep {self.timestep}")
+        
+        self.updateGraphicsTimestamp()
+
+        self.data = np.random.rand(self.Nx, self.Ny, self.Nz)
+        self.volume.set_data(self.data)        
+        self.canvas.update()
+
+        if self.timestep >= self.total_timesteps:
+            self.timer.stop()
+            print("Simulation completed.")
+        
