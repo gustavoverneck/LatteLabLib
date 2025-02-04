@@ -4,7 +4,12 @@ setup(
     name="LatteLabLib",
     version="0.1.0",
     packages=find_packages(),
-    install_requires=[],
+    install_requires=[
+        "jaxlib==0.5.0",
+        "jax==0.5.0",
+        "numpy==1.26.4",
+        "vispy==0.14.3"
+    ],
     author="Gustavo A. Verneck",
     author_email="gustavoverneck@gmail.com",
     description="A simple Python package for running LBM based CFD simulations.",
