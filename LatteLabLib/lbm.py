@@ -14,6 +14,7 @@ from vispy.scene import visuals
 from time import perf_counter
 
 # Internal imports
+from .graphics import Graphics
 from .config import available_color_schemes
 
 # -----------------------------------
@@ -27,8 +28,8 @@ class LBM:
 
     def initialize(self, config):
         # Set configuration
-        self.initial_time = perf_counter()
         self.config = config
+        self.initial_time = perf_counter()
         self.velocities_set = config['velocities_set']
         self.simtype = config['simtype']
         self.use_temperature = config['use_temperature']
@@ -88,94 +89,17 @@ class LBM:
         self.rho = jnp.ones((self.Nx, self.Ny, self.Nz), dtype=jnp.float32)
         self.u = jnp.zeros((self.Nx, self.Ny, self.Nz, self.D), dtype=jnp.float32)
         self.flags = jnp.zeros((self.Nx, self.Ny, self.Nz), dtype=jnp.int32)
-
-        self.data = np.random.rand(self.Nx, self.Ny, self.Nz)
         
         if self.use_temperature:
             self.T = jnp.ones((self.Nx, self.Ny, self.Nz), dtype=jnp.float32)
-        
-        if self.use_graphics:
-            self.initializeGraphics()
 
-    def initializeGraphics(self):
-        vispy.use('pyqt5')
-        self.canvas = vispy.scene.SceneCanvas(keys='interactive', show=True)
-        self.canvas.size = self.windowDimensions
-        self.view = self.canvas.central_widget.add_view()
-        
-        # Camera settings
-        if self.D == 2:
-            self.view.camera = vispy.scene.cameras.TurntableCamera(
-                            center=(self.Nx/2, self.Ny/2, self.Nx/2),  # Center of the volume
-                            elevation=0,  # Initial viewing angle (adjustable)
-                            azimuth=90,  # Initial rotation (adjustable)
-                            distance=1.5 * max(self.grid_size),  # Adjust distance automatically
-                            fov=35
-                        )
-
-            
-        elif self.D == 3:
-            self.view.camera = vispy.scene.cameras.TurntableCamera(
-                center=(self.Nx/2, self.Ny/2, self.Nz/2),  # Volume center
-                elevation=0,  # Viewing angle (adjustable)
-                azimuth=90,  # Initial rotation (adjustable)
-                distance=1.5 * max(self.grid_size)  # Adjust distance automatically
-            )
-           
-        self.volume = visuals.Volume(self.data, parent=self.view.scene, clim=(0, 1), cmap=self.colorscheme)
-        self.viewmode = "density"
-
-        # Set up flags for key press events
-        self.show_help_menu = False
-        self.show_timestep = False
-
-        self.canvas.title = f"LatteLab"
-        # Initialize timer for automatic updates
-        self.timer = vispy.app.Timer(interval=self.timer_interval, connect=self.update_simulation, start=True)
-        vispy.app.run()
-
-
-    def setGraphicsColorScheme(self, colorscheme):
-        """Change color scheme dynamically"""
-        if colorscheme not in available_color_schemes:
-            print(f"Color scheme {colorscheme} not available. Defaulting to 'inferno'")
-            self.colorscheme = "inferno"
-        else:
-            self.colorscheme = colorscheme
-        self.volume.cmap = self.colorscheme  # Apply new color scheme
     
-    def updateGraphicsTimestamp(self):
-        # Add text to display timestep in the upper right corner
-        for visual in self.canvas.scene.children:
-            if isinstance(visual, visuals.Text):
-                visual.parent = None  # Remove previous text
-        t1 = visuals.Text(f'Timestep: {self.timestep}', parent=self.canvas.scene, color='white')
-        t1.font_size = 18
-        t1.pos = self.canvas.size[0] - 100, self.canvas.size[1] - 50
-
-    def setGraphicsWindowDimensions(self, dimensions):
-        if not isinstance(dimensions, tuple):
-            raise ValueError("Window dimensions must be a tuple")
-        if len(dimensions) != 2:
-            raise ValueError("Window dimensions tuple must have exactly 2 elements")
-        
-        self.canvas.size = dimensions
-
     def setInitialConditions(self, rho, u, T=None):
         # Need to add validation for rho, u and T
         self.u = u
         self.rho = rho
         if self.use_temperature:
             self.T = T
-    
-    def run(self):
-        for t in range(self.total_timesteps):
-            #self.collide_and_stream()
-            #self.test()
-            if self.use_graphics:
-                self.updateGraphicsTimestamp()
-        
-        print("Simulation completed.")
             
     def getResults(self):
         """Return LBM simulation results"""
@@ -209,99 +133,56 @@ class LBM:
         if not jnp.any(self.flags[-1, :, :]):  # Right boundary
             self.f = self.f.at[-1, :, :].set(self.f[1, :, :])  # Copy from left
         if not jnp.any(self.flags[:, 0, :]):  # Bottom boundary
-            self.f = self.f.at[:, 0, :].set(self.f[:, -2, :])
+            self.f = self.f.at[:, 0, :].set(self.f[:, -2, :])   # Copy from top
         if not jnp.any(self.flags[:, -1, :]):  # Top boundary
-            self.f = self.f.at[:, -1, :].set(self.f[:, 1, :])
+            self.f = self.f.at[:, -1, :].set(self.f[:, 1, :])   # Copy from bottom
 
-    # Key press event handler
-    def on_key_press(self, event):
-        if event.key == 'Space':
-            if self.timer.running:
-                self.timer.stop()
-                print("Simulation paused.")
-            else:
-                self.timer.start()
-                print("Simulation resumed.")
+        if self.D == 3:
+            if not jnp.any(self.flags[:, :, 0]):  # Front boundary
+                self.f = self.f.at[:, :, 0].set(self.f[:, :, -2])  # Copy from back
+            if not jnp.any(self.flags[:, :, -1]):  # Back boundary
+                self.f = self.f.at[:, :, -1].set(self.f[:, :, 1])  # Copy from front
 
-        if event.key == 'h':
-            self.show_help_menu = not self.show_help_menu
-            if self.show_help_menu:
-                self.display_help_menu()
-            else:
-                self.hide_help_menu()
-
-        if event.key == 'q':
-            self.timer.stop()
-            print("Simulation stopped.")
-            self.canvas.close()
-        
-        if event.key == 'c':
-            print("Change color scheme")
-            self.current_colorscheme_index = available_color_schemes.index(self.colorscheme)
-            self.colorscheme = available_color_schemes[(self.current_colorscheme_index + 1) % len(available_color_schemes)]
-            self.setGraphicsColorScheme(self.colorscheme)
-
-        if event.key == 't':
-            if self.viewmode == "density":
-                self.viewmode = "temperature"
-                self.volume.set_data(self.T)
-            else:
-                self.viewmode = "density"
-                self.volume.set_data(self.data)
-            print(f"Toggled view mode to {self.viewmode}")
-        
-        if event.key == 'i':
-            self.show_timestep = not self.show_timestep
-            if self.show_timestep:
-                self.display_time_step()
-            else:
-                self.hide_time_step()
-
-        self.canvas.update()
-
-    def display_time_step(self):
-        # Display timestep text
-        timestep_text = f"Timestep: {self.timestep}"
-        self.timestep_visual = visuals.Text(timestep_text, parent=self.canvas.scene, color='white')
-        self.timestep_visual.font_size = 10
-        self.timestep_visual.pos = 180, self.canvas.size[1] - 300
-
-    def hide_time_step(self):
-        self.timestep_visual.parent = None
-
-    def display_help_menu(self):
-        # Display help text
-        help_text = """space: Pause/Resume simulation.\nh: Display help menu.\nq: Quit simulation.\nc: Change color scheme: {colorscheme}\nt: Toggle variable: {viewmode}""".format(colorscheme=self.colorscheme, viewmode=self.viewmode)
-        self.help_visual = visuals.Text(help_text, parent=self.canvas.scene, color='white')
-        self.help_visual.font_size = 10
-        self.help_visual.pos = 180, self.canvas.size[1] - 400
+    def runNoGraphics(self):
+        for t in range(self.total_timesteps):
+            self.collide_and_stream()
+        print(self.calculateElapsedTime())
     
-    def hide_help_menu(self):
-        self.help_visual.parent = None
+    def run(self):
+        self.graphics = Graphics(self.config)
+        self.graphics.initialize()
+        self.graphics.setupCamera()
+        self.graphics.setInitialFlags()
+        self.graphics.startTimer(func=self.update_simulation)
 
     def update_simulation(self, event):
         self.timestep += 1
-
-        if self.timestep <=  self.total_timesteps:
+        if self.timestep <= self.total_timesteps and self.graphics.running:
             # Connect the key press event to the canvas
-            self.canvas.events.key_press.connect(self.on_key_press)
+            self.graphics.canvas.events.key_press.connect(self.graphics.on_key_press)
             
-            if self.show_timestep:
-                self.updateGraphicsTimestamp()
-            
-            if self.show_help_menu:
-                self.display_help_menu()
+            # on_resize event
+            self.graphics.canvas.events.resize.connect(self.graphics.on_resize)
 
-            self.data = np.random.rand(self.Nx, self.Ny, self.Nz)
-            self.volume.set_data(self.data)        
-            self.canvas.update()
+            # Update timestamp
+            self.graphics.timestep += 1   
+            if self.graphics.show_timestep:
+                self.graphics.updateTimestep(self.timestep)
+
+            # Display help menu if requested
+            if self.graphics.show_help_menu:
+                self.graphics.display_help_menu()
+
+            # Run LBM simulation
+            self.graphics.updateData(rho=self.rho, u=self.u, T=self.T)  
+            self.graphics.canvas.update()
         else:
-            self.timer.stop()
-            self.final_time = perf_counter()
-            print(f"Simulation completed in {self.elapsed_time()}.")
+            self.graphics.timer.stop()
+            self.graphics.running = False
+            print(f"Elapsed time: {self.elapsed_time()}")
 
-        
     def elapsed_time(self):
+        self.final_time = perf_counter()
         elapsed = self.final_time - self.initial_time
         hours, rem = divmod(elapsed, 3600)
         minutes, seconds = divmod(rem, 60)
