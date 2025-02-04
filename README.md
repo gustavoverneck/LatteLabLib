@@ -2,7 +2,7 @@
 
 ### LatteLabLib is a Python LBM based CFD solver that is still in development.
 
-## Dependancies
+## Dependencies
   - Numpy
   - JAX
   - Vispy
