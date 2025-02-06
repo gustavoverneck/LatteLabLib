@@ -36,4 +36,4 @@ Contributions are welcome! If you want to contribute:
 5. Open a pull request
 
 ## Contact
-Email me: [gustavoverneck@gmail.com](gustavoverneck@gmail.com)
+Email me: [gustavoverneck@gmail.com](mailto:gustavoverneck@gmail.com)
