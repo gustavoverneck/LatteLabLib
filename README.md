@@ -2,7 +2,6 @@
 # LatteLab
 
 ![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)  
-![JAX](https://img.shields.io/badge/JAX-0.5.0-blue.svg)  
 ![License: GNU v3](https://img.shields.io/badge/License-GNU%20v3-blue.svg)  
 
 ## Description  
