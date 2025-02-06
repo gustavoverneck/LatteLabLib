@@ -33,4 +33,7 @@ Contributions are welcome! If you want to contribute:
 2. Create a new branch (`git checkout -b feature/my-feature`)  
 3. Commit your changes (`git commit -m 'Add new feature'`)  
 4. Push to the branch (`git push origin feature/my-feature`)  
-5. Open a pull request  
+5. Open a pull request
+
+## Contact
+Email me: [gustavoverneck@gmail.com](gustavoverneck@gmail.com)
