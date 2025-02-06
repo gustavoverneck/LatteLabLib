@@ -1,7 +1,7 @@
 
 # LatteLab
 
-![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)  
+![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)
 ![License: GNU v3](https://img.shields.io/badge/License-GNU%20v3-blue.svg)  
 
 ## Description  
@@ -19,7 +19,7 @@ To use LatteLab, you will need to install specific versions of [JAX](https://git
 pip install jaxlib==0.5.0 jax==0.5.0 numpy==1.26.4 vispy==0.14.3
 ```
 
-⚠️ A PIP package installation will be available in future releases.  
+A PIP package installation will be available in future releases.  
 
 ## How to Use  
 The official documentation is under development and will provide comprehensive examples and API references.  
@@ -27,13 +27,10 @@ The official documentation is under development and will provide comprehensive e
 ## License  
 This project is licensed under the **GNU General Public License v3.0**. For more details, see the [LICENSE](LICENSE) file.  
 
-## 🤝 Contributing  
+## Contributing  
 Contributions are welcome! If you want to contribute:  
 1. Fork the repository  
 2. Create a new branch (`git checkout -b feature/my-feature`)  
 3. Commit your changes (`git commit -m 'Add new feature'`)  
 4. Push to the branch (`git push origin feature/my-feature`)  
-5. Open a pull request
-
-## Contact
-Email me: [gustavoverneck@gmail.com](mailto:gustavoverneck@gmail.com)
+5. Open a pull request  

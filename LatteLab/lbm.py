@@ -56,16 +56,26 @@ class LBM:
         # Define velocity sets
         velocity_data = {
             'D2Q9': (
-                [[0,0], [1,0], [0,1], [-1,0], [0,-1], [1,1], [-1,1], [-1,-1], [1,-1]],
+                [[0,0], [1,0], [-1,0], [0,1], [0,-1], [1,1], [-1,-1], [1,-1], [-1,1]],
                 [4./9., 1./9., 1./9., 1./9., 1./9., 1./36., 1./36., 1./36., 1./36.],
                 [0, 3, 4, 1, 2, 7, 8, 5, 6]
             ),
+            'D3Q7': (
+                [[0,0,0], [1,0,0], [-1,0,0], [0,1,0], [0,-1,0], [0,0,1], [0,0,-1]],
+                [1./4.] + [1./8.]*6,
+                [0, 4, 5, 6, 1, 2, 3]
+            ),
             'D3Q15': (
                 [[0,0,0], [1,0,0], [-1,0,0], [0,1,0], [0,-1,0], [0,0,1], [0,0,-1],
-                 [1,1,1], [-1,-1,-1], [1,-1,-1], [-1,1,1], [-1,1,-1], [1,-1,1],
-                 [1,1,-1], [-1,-1,1]],
+                 [1,1,1], [-1,-1,-1], [1,1,-1], [-1,-1,1], [1,-1,1], [-1,1,-1],
+                 [-1,1,1], [1,-1,-1]],
                 [[2./9.] + [1./9.]*6 + [1./72.]*8],
                 [0, 2, 1, 4, 3, 6, 5, 8, 7, 10, 9, 12, 11, 14, 13]
+            ),
+            'D3Q13': (
+                [[0,0,0], [1,1,0], [-1,-1,0], [1,0,1], [-1,0,-1], [-1,1,1], [-1,-1,-1], [1,1,-1], [1,0,-1], [-1,0,1], [0,1,-1], [0,-1,1]],
+                [[1./2.], [1./24.]*12],
+                [0, 2, 1, 4, 3, 6, 5, 8, 7, 10, 9, 12, 11]
             ),
             'D3Q19': (
                 [[0,0,0], [1,0,0], [-1,0,0], [0,1,0], [0,-1,0], [0,0,1], [0,0,-1],
@@ -73,6 +83,15 @@ class LBM:
                  [1,-1,0], [-1,1,0], [1,0,-1], [-1,0,1], [0,1,-1], [0,-1,1]],
                 [[1./3.] + [1./18.]*6 + [1./36.]*12],
                 [0, 2, 1, 4, 3, 6, 5, 8, 7, 10, 9, 12, 11, 14, 13, 16, 15, 18, 17]
+            ),
+            'D3Q27': (
+                [[0,0,0], [1,0,0], [-1,0,0], [0,1,0], [0,-1,0], [0,0,1], [0,0,-1],
+                 [1,1,0], [-1,-1,0], [1,0,1], [-1,0,-1], [0,1,1], [0,-1,-1],
+                 [1,-1,0], [-1,1,0], [1,0,-1], [-1,0,1], [0,1,-1], [0,-1,1],
+                 [1,1,1], [-1,-1,-1], [1,1,-1], [-1,-1,1], [1,-1,1], [-1,1,-1],
+                 [-1,1,1], [1,-1,-1]],
+                [[8./27.] + [2./27.]*6 + [1./54.]*12 + [1./216.]*8],
+                [0, 2, 1, 4, 3, 6, 5, 8, 7, 10, 9, 12, 11, 14, 13, 16, 15, 18, 17, 20, 19, 22, 21, 24, 23, 26, 25]
             )
         }
         
@@ -92,15 +111,22 @@ class LBM:
         
         if self.use_temperature:
             self.T = jnp.ones((self.Nx, self.Ny, self.Nz), dtype=jnp.float32)
+   
+    def setInitialConditions(self, func, target=None):
+        if target is None:
+            raise ValueError("Target array must be provided")
 
-    
-    def setInitialConditions(self, rho, u, T=None):
-        # Need to add validation for rho, u and T
-        self.u = u
-        self.rho = rho
-        if self.use_temperature:
-            self.T = T
-            
+        if target == 'rho':
+            self.rho = jax.vmap(lambda x, y, z: func(x, y, z))(jnp.arange(self.Nx)[:, None, None], jnp.arange(self.Ny)[None, :, None], jnp.arange(self.Nz)[None, None, :])
+        elif target == 'u':
+            self.u = jax.vmap(lambda x, y, z: func(x, y, z))(jnp.arange(self.Nx)[:, None, None], jnp.arange(self.Ny)[None, :, None], jnp.arange(self.Nz)[None, None, :])
+        elif target == 'T' and self.use_temperature:
+            self.T = jax.vmap(lambda x, y, z: func(x, y, z))(jnp.arange(self.Nx)[:, None, None], jnp.arange(self.Ny)[None, :, None], jnp.arange(self.Nz)[None, None, :])
+        elif target == 'flags':
+            self.flags = jax.vmap(lambda x, y, z: func(x, y, z))(jnp.arange(self.Nx)[:, None, None], jnp.arange(self.Ny)[None, :, None], jnp.arange(self.Nz)[None, None, :])
+        else:
+            raise ValueError("Unknown target array")
+
     def getResults(self):
         """Return LBM simulation results"""
         return self.rho, self.u
