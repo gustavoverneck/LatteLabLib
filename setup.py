@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="LatteLabLib",
+    name="LatteLab",
     version="0.1.0",
     packages=find_packages(),
     install_requires=[
@@ -21,5 +21,5 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    python_requires='>=3.10',
+    python_requires='>=3.12.0',
 )
