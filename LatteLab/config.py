@@ -4,6 +4,7 @@
 available_velocities_sets = ['D2Q9', 'D3Q15', 'D3Q19']   # Add D3Q15 and D3Q27 in the future
 avilable_simtypes = ['fluid']                       # Add plasma in the future
 available_color_schemes = ["grays", "hot", "cool", "viridis", "inferno", "plasma", "magma", "cividis", "jet", "turbo", "RdYlBu", "blues"]
+available_dtypes = ["float32"]
 
 class Config:
     """
@@ -20,14 +21,15 @@ class Config:
     """
     
     def __init__(self, velocities_set='D2Q9', 
-                 use_temperature=True, 
+                 use_temperature=False, 
                  use_graphics=True, 
                  simtype='fluid', 
-                 grid_size=(100, 100, 0), 
+                 grid_size=(64, 64, 1), 
                  viscosity=0.1, 
                  total_timesteps=1000, 
                  cmap='inferno',
-                 window_dimensions=(1280, 720)
+                 window_dimensions=(1280, 720),
+                 dtype='float32'
                  ):	
         """
         Initialize the configuration for the simulation.
@@ -41,6 +43,7 @@ class Config:
         total_timesteps (int): The total number of timesteps to run the simulation. Default is 1000.
         cmap (str): The color map to use for visualization. Default is 'inferno'.
         window_dimensions (tuple): The dimensions of the window for visualization. Default is (1280, 720).
+        dtype(str): Data type of the simulation. Default is "float32".
         Attributes:
         config (dict): A dictionary containing the configuration parameters.
         """
@@ -48,13 +51,14 @@ class Config:
         self.config = {
             'velocities_set': velocities_set,
             'simtype': simtype,
-            'use_temperature': True,
-            'use_graphics': True,
+            'use_temperature': use_temperature,
+            'use_graphics': use_graphics,
             'grid_size': grid_size,
             'viscosity': viscosity,
             'total_timesteps': total_timesteps,
             'cmap': cmap,
-            'window_dimensions': window_dimensions
+            'window_dimensions': window_dimensions,
+            'dtype': dtype
         }
         self.checkConfig()
 
@@ -92,9 +96,10 @@ class Config:
             - 'total_timesteps': Must be a positive integer.
             - 'cmap': Must be present in `available_color_schemes`.
             - 'window_dimensions': Must be a tuple of dimension 2.
+            - 'dtype': Must be present in `available_dtypes`
         """
         
-        global available_velocities_sets, avilable_simtypes
+        global available_velocities_sets, avilable_simtypes, available_color_schemes, available_dtypes
 
         # Check if all required keys are present
         required_keys = ['velocities_set', 'simtype', 'use_temperature', 'use_graphics', 'grid_size', 'viscosity', 'total_timesteps', 'cmap']
@@ -150,5 +155,46 @@ class Config:
         if len(self.config['window_dimensions']) != 2:
             raise ValueError("Invalid window dimensions value")
         
-        
-        
+        # Check if dtype is available
+        if self.config["dtype"] not in available_dtypes:
+            raise ValueError("Invalid dtype")
+               
+
+
+
+# --------------------------------------------------------------------------------------------
+# Define velocity sets
+velocities_sets = {
+    'D2Q9': {
+        "c":[[0,0], [1,0], [-1,0], [0,1], [0,-1], [1,1], [-1,-1], [1,-1], [-1,1]],
+        "w":[4./9., 1./9., 1./9., 1./9., 1./9., 1./36., 1./36., 1./36., 1./36.]
+    },
+    'D3Q7': {
+        "c":[[0,0,0], [1,0,0], [-1,0,0], [0,1,0], [0,-1,0], [0,0,1], [0,0,-1]],
+        "w":[1./4.] + [1./8.]*6
+    },
+    'D3Q15': {
+        "c":[[0,0,0], [1,0,0], [-1,0,0], [0,1,0], [0,-1,0], [0,0,1], [0,0,-1],
+            [1,1,1], [-1,-1,-1], [1,1,-1], [-1,-1,1], [1,-1,1], [-1,1,-1],
+            [-1,1,1], [1,-1,-1]],
+        "w":[[2./9.] + [1./9.]*6 + [1./72.]*8]
+    },
+    'D3Q13': {
+        "c":[[0,0,0], [1,1,0], [-1,-1,0], [1,0,1], [-1,0,-1], [-1,1,1], [-1,-1,-1], [1,1,-1], [1,0,-1], [-1,0,1], [0,1,-1], [0,-1,1]],
+        "w":[[1./2.], [1./24.]*12]
+    },
+    'D3Q19': {
+        "c":[[0,0,0], [1,0,0], [-1,0,0], [0,1,0], [0,-1,0], [0,0,1], [0,0,-1],
+            [1,1,0], [-1,-1,0], [1,0,1], [-1,0,-1], [0,1,1], [0,-1,-1],
+            [1,-1,0], [-1,1,0], [1,0,-1], [-1,0,1], [0,1,-1], [0,-1,1]],
+        "w":[[1./3.] + [1./18.]*6 + [1./36.]*12]
+    },
+    'D3Q27': {
+        "c":[[0,0,0], [1,0,0], [-1,0,0], [0,1,0], [0,-1,0], [0,0,1], [0,0,-1],
+            [1,1,0], [-1,-1,0], [1,0,1], [-1,0,-1], [0,1,1], [0,-1,-1],
+            [1,-1,0], [-1,1,0], [1,0,-1], [-1,0,1], [0,1,-1], [0,-1,1],
+            [1,1,1], [-1,-1,-1], [1,1,-1], [-1,-1,1], [1,-1,1], [-1,1,-1],
+            [-1,1,1], [1,-1,-1]],
+        "w":[[8./27.] + [2./27.]*6 + [1./54.]*12 + [1./216.]*8]
+    }
+}

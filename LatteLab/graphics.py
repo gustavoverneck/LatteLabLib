@@ -3,6 +3,7 @@
 
 # External Imports
 import numpy as np
+import cupy as cp
 import vispy.scene
 import vispy.app
 from vispy.scene import visuals
@@ -221,10 +222,10 @@ class Graphics:
             self.display_time_step()
 
     def updateData(self, rho, u, T=None):
-        self.rho = np.array(rho, dtype=np.float32)
-        self.u = np.array(u, dtype=np.float32)
+        self.rho = rho
+        self.u = np
         if T is not None:
-            self.T = np.array(T, dtype=np.float32)
+            self.T = T
     
     def on_resize(self, event):
         self.canvas.size = event.size
